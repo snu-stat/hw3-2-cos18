@@ -1,21 +1,43 @@
 ---
 title: "숙제 3"
 subtitle: "데이터과학 입문"
-author: "원중호"
+author: "박성우"
 date: today
 date-format: "MMMM YYYY"
 institute: 서울대학교 통계학과
 format:
   html:
       embed-resources: true
+  ipynb: default
 
 mainfont: "Noto Sans Korean Light"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, fig.width=6, fig.height=4, out.width = "70%", fig.align = "center", python.reticulate = TRUE)  
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, fig.width = 6, fig.height = 4, out.width = "70%", fig.align = "center", python.reticulate = TRUE)
 options(knitr.table.format = "html")
-reticulate::use_condaenv(condaenv = "introds", conda = "/opt/homebrew/bin/conda") # for persistency
+# RETICULATE_PYTHON이 외부에서 지정된 경우 (예: GitHub Actions, Docker) 그 값을 그대로 사용
+# 그렇지 않으면 로컬 pyenv anaconda의 conda 바이너리로 지정된 환경을 사용
+if (nzchar(Sys.getenv("RETICULATE_PYTHON"))) {
+    reticulate::use_python(Sys.getenv("RETICULATE_PYTHON"), required = TRUE)
+} else {
+    conda_bin <- file.path(
+        path.expand(Sys.getenv("PYENV_ROOT", unset = "~/.pyenv")),
+        "versions", "anaconda3-2025.12-2", "bin", "conda"
+    )
+    if (file.exists(conda_bin)) {
+        reticulate::use_condaenv(
+            condaenv = Sys.getenv("RETICULATE_CONDAENV", unset = "base"),
+            conda = conda_bin,
+            required = TRUE
+        )
+    }
+}
+# knitr의 eng_python_initialize_matplotlib 훅이 Python 청크 시작 시점에
+# matplotlib$pyplot 에 접근하므로 미리 import해 두어야 한다.
+reticulate::py_run_string(
+    "import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot"
+)
 ```
 
 ## 지시사항
@@ -23,7 +45,7 @@ reticulate::use_condaenv(condaenv = "introds", conda = "/opt/homebrew/bin/conda"
 제출마감 2026-06-15 23:00
 
 1.	R과 Python을 모두 사용하여 사용된 코드와 데이터랭글링 절차, 분석결과를 설명한다. 두 언어의 분석결과가 차이가 있으면 그 이유를 설명한다.
-2.  [Quarto Markdown](https://quarto.org/docs/authoring/markdown-basics.html)을 사용한다. 제공된 숙제 `.qmd` 파일에 본인의 답안을 "답안" 절에 추가하여 제출한다. Quarto Markdown은 RStudio 또는 Visual Studio Code에 [Quarto Extension](https://marketplace.visualstudio.com/items?itemName=quarto.quarto)을 추가하여 컴파일, 다른 문서 형식으로 변환할 수 있다. 
+2.  [Quarto Markdown](https://quarto.org/docs/authoring/markdown-basics.html)을 사용한다. 제공된 숙제 `.qmd` 파일에 본인의 답안을 "답안" 절에 추가하여 제출한다. Quarto Markdown은 RStudio 또는 Visual Studio Code에 [Quarto Extension](https://marketplace.visualstudio.com/items?itemName=quarto.quarto)을 추가하여 컴파일, 다른 문서 형식으로 변환할 수 있다.
 3.  R의 `reticulate` 패키지를 사용하면 하나의 `.qmd` 파일 안에서 R과 Python을 동시에 사용할 수 있다. 이때 다음 문법을 사용하여 두 언어 코드를 탭으로 구분한다.  숙제 `.qmd` 파일은 `reticulate`을 사용하도록 준비되어 있다.
 
 ````
@@ -57,6 +79,11 @@ Python code
 
 #### **늦게 제출된 과제물은 받지 않는다.**
 
+# 참고
+이 파일(`hw03.qmd`)의 setup 청크는 작성자의 로컬 환경에 맞춰 `reticulate`를 설정해 두었다. `RETICULATE_PYTHON` 환경변수가 잡혀 있으면(GitHub Actions나 컨테이너 안에서) 그 인터프리터를 쓰고, 없으면 로컬 pyenv anaconda 환경으로 떨어지도록 분기해 두었으니, 다른 환경에서 컴파일할 때는 이 부분과 `.Rprofile`을 본인 환경에 맞게 고치면 된다.
+
+분석 코드는 R과 Python을 함께 작성하는 것을 원칙으로 했다. 로지스틱 회귀, 포아송 회귀, 비선형 최소제곱(`nls`)까지는 강의록(MASS)에 R과 Python(`statsmodels`, `scipy`) 예시가 나란히 실려 있어 두 언어로 적었다. 다만 음이항 회귀(`glm.nb`)만은 강의록에서 R로만 다루고 Python 코드가 따로 없어(문제 2-3 (2)), 그 부분은 R로만 작성했다.
+
 # 1부  교과서 연습문제
 
 ## 문제 1-1
@@ -65,6 +92,121 @@ Python code
 
 ### 답안
 
+`NHANES` 자료에서 20세 이상 성인을 두고 "지금 담배를 피우는가"를 예측하는 로지스틱 회귀를 세우는 문제이다. `SmokeNow`(현재 흡연 여부)는 평생 담배를 100개비 넘게 피워 본 사람한테만 물어본 항목이라, 100개비를 채운 적 없는 사람은 전부 결측으로 비어 있다. 이걸 그냥 두면 표본이 "한때라도 담배깨나 피운 사람"으로 쪼그라들어서 비흡연의 기준 자체가 이상해진다. 그래서 100개비 미만인 사람(`Smoke100 == "No"`)은 현재 비흡연(0)으로 다시 코딩해 줘야 반응변수가 제대로 완성된다.
+
+우선 `Smoke100`과 `SmokeNow`를 교차표로 찍어 결측이 어디서 생기는지 본 다음, 그 구조에 맞춰 `currentSmoker`를 만들었다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+library(tidyverse)
+library(NHANES)
+library(MASS)
+
+nhanes_df <- NHANES::NHANES
+
+# 20세 이상에서 SmokeNow와 Smoke100의 결측 구조 확인
+nhanes_df %>%
+    filter(Age >= 20) %>%
+    count(Smoke100, SmokeNow)
+```
+
+```{r}
+adult <- nhanes_df %>%
+    filter(Age >= 20) %>%
+    mutate(currentSmoker = case_when(
+        SmokeNow == "Yes" ~ 1L,
+        SmokeNow == "No" ~ 0L,
+        Smoke100 == "No" ~ 0L,
+        TRUE ~ NA_integer_
+    )) %>%
+    filter(!is.na(currentSmoker)) %>%
+    dplyr::select(currentSmoker, Age, Gender, Race1, Education, Poverty, BMI)
+
+cat("관측치:", nrow(adult), " 현재 흡연율:", round(mean(adult$currentSmoker), 3), "\n")
+```
+
+## Python
+
+```{python}
+import polars as pl
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+# R에서 정리한 adult 데이터프레임을 reticulate로 그대로 받아 사용
+adult = r.adult.copy()
+print("관측치:", len(adult), " 현재 흡연율:", round(adult["currentSmoker"].mean(), 3))
+```
+
+:::
+
+20세 이상 7,235명 가운데 1,466명이 현재 흡연자라 흡연율은 20.3% 정도다.
+
+이제 나이, 성별, 인종, 교육수준, 빈곤지표(`Poverty`), 체질량지수(`BMI`)를 넣어 로지스틱 회귀를 적합하고 AIC 기준 단계별 선택으로 변수를 정리했다. R에서 요인의 기준수준(여성, Black, 8th Grade)이 자동으로 잡히는데, Python에서도 똑같은 기준을 쓰도록 `Treatment(reference=...)`로 일일이 맞췄다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+fit_smoke <- glm(
+    currentSmoker ~ Age + Gender + Race1 + Education + Poverty + BMI,
+    data = adult, family = binomial
+)
+fit_smoke_step <- stepAIC(fit_smoke, trace = FALSE)
+
+# 단계별 선택
+formula(fit_smoke_step)
+round(summary(fit_smoke_step)$coef, 4)
+round(exp(coef(fit_smoke_step)), 3)
+```
+
+```{r}
+# 0.5 절단값으로 만든 혼동행렬 (예측모형 관점의 분류 성능)
+adult_used <- fit_smoke_step$model
+pred_yes <- predict(fit_smoke_step, type = "response") > 0.5
+table(observed = adult_used$currentSmoker, predicted = pred_yes)
+```
+
+## Python
+
+```{python}
+# R의 요인 기준수준과 동일하게: Gender=female, Race1=Black, Education='8th Grade'
+formula = (
+    "currentSmoker ~ Age "
+    "+ C(Gender, Treatment(reference='female')) "
+    "+ C(Race1, Treatment(reference='Black')) "
+    "+ C(Education, Treatment(reference='8th Grade')) "
+    "+ Poverty + BMI"
+)
+fit_smoke = smf.glm(formula, data=adult, family=sm.families.Binomial()).fit()
+
+# 계수
+coef_tbl = pd.DataFrame({
+    "estimate": fit_smoke.params,
+    "odds_ratio": np.exp(fit_smoke.params),
+    "p_value": fit_smoke.pvalues,
+})
+print(coef_tbl.round(4))
+print("\nAIC:", round(fit_smoke.aic, 1), " n:", int(fit_smoke.nobs))
+
+# 0.5 절단값 혼동행렬
+pred_yes = (fit_smoke.predict() > 0.5).astype(int)
+print("\n", pd.crosstab(fit_smoke.model.endog.astype(int), pred_yes,
+                        rownames=["observed"], colnames=["predicted"]))
+```
+
+:::
+
+`stepAIC`는 후보 여섯 개를 하나도 떨어뜨리지 않았다. 출력 표만 보면 Python 쪽은 patsy가 `C()`로 감싼 범주형 항을 먼저 늘어놓아 행 순서가 R과 달라 보이는데, 값 자체는 그대로다.
+
+해석은 오즈비로 확인했다. 나이가 한 살 들 때마다 현재 흡연 오즈가 0.98배로 조금씩 깎이고(나이 들수록 끊었거나 애초에 안 피우는 비율이 높다), 남성은 여성보다 흡연 오즈가 1.40배다. 교육수준이 큰 차이를 보인다. 대졸자(College Grad)는 기준집단인 중졸(8th Grade)에 견줘 흡연 오즈가 0.26배, 그러니까 4분의 1 수준으로 뚝 떨어진다. 빈곤지표는 값이 클수록(덜 가난할수록) 0.83배씩 낮아지고 BMI도 한 단위당 0.96배로 미세하게 음의 방향이다. 인종에서는 Mexican(0.38배)과 Hispanic(0.56배)이 기준보다 흡연 오즈가 뚜렷하게 낮았다. 교육과 사회경제적 지위가 흡연을 강하게 가르는 변수임을 볼 수 있다.
+
+다만 잘 맞는 모형과 잘 맞히는 모형은 다른 얘기다. 흡연율이 20% 남짓이라 0.5를 절단값으로 쓰면 모형이 사실상 거의 모두를 비흡연으로 찍어 버린다. 혼동행렬은 `BMI`나 `Poverty`에 결측이 있는 행을 `glm`이 알아서 떨군 완전관측 6,632명 기준인데, 그중 실제 흡연자 1,328명 가운데 127명만 흡연으로 잡아냈다. 정확도는 80% 가까이 나와 그럴싸해 보여도 민감도는 형편없다는 뜻이다. 이렇게 한쪽으로 쏠린 자료에서는 절단값을 낮추거나 ROC 곡선으로 절단값 전체를 훑어보는 편이, 정확도 하나만 들이미는 것보다 모형을 정직하게 평가하는 방법이다.
 
 # 2부  데이터 분석 실무
 
@@ -76,14 +218,14 @@ Python code
 
 ## 문제 2-1
 
-Lahman Package의 `Teams` 데이터프레임에서 코로나 시즌인 2020년을 제외한 2010년부터 2025년 사이의 데이터를 이용하여 다음 질문에 답하라. 
+Lahman Package의 `Teams` 데이터프레임에서 코로나 시즌인 2020년을 제외한 2010년부터 2025년 사이의 데이터를 이용하여 다음 질문에 답하라.
 
 1.  MDSR Chapter 7 Iteration 에서 배운 Bill James의 공식을 변형한 다음 모형을 데이터에 적합하고, 모수 $k$의 점추정치와 신뢰구간을 구하라.
 $$
   WPct = \frac{RS^k}{S^k+RA^k} = \frac{1}{1+(RA/RS)^k}
 $$
 
-2.  회귀계수 $\beta_1$이 위 모형의 $k$와 거의 같은 의미를 가지는 로지스틱 회귀 모형을 세우고 이를 데이터에 적합하라. 모수와 점추정치와 신뢰구간을 구하고 이를 1항의 결과와 비교하라. 
+2.  회귀계수 $\beta_1$이 위 모형의 $k$와 거의 같은 의미를 가지는 로지스틱 회귀 모형을 세우고 이를 데이터에 적합하라. 모수와 점추정치와 신뢰구간을 구하고 이를 1항의 결과와 비교하라.
 
     *주의*: 절편이 없는 모형을 적합해야 함.
     *힌트 1*. 로짓은 $\log〖WPct/(1-WPct)$로 계산됨.
@@ -91,8 +233,8 @@ $$
 
 3.  2항의 모형 적합 결과에 대한 다음 세가지 진단 중 최소 두가지 이상을 수행하여 모형적합이 잘 되었는지 확인하라.
 
-    i.  Residual Deviance에 대한 해석 (카이제곱 분포와 비교) 
-	  ii. Deviance residuals vs linear predictors ($\eta$) 산점도 
+    i.  Residual Deviance에 대한 해석 (카이제곱 분포와 비교)
+	  ii. Deviance residuals vs linear predictors ($\eta$) 산점도
 	  iii.  관측된 WPct와 모형에서 예측하는 WPct를 산점도 그래프로 비교
 
 4.  `WPct`를 반응변수로, `log(RA)`와 `log(RS)`를 설명변수로 하는 절편이 없는 로지스틱선형회귀 모형을 적합하고 회귀계수들의 추정 결과를 a와 b항의 결과와 비교하라. (유사한 모형을 얻는지 여부 등)
@@ -100,19 +242,416 @@ $$
 
 ### 답안
 
+`Teams`에서 2010–2025년 중 2020년만 뺀 구간을 추려, 팀-시즌 하나를 한 행으로 두고 득점 `RS = R`, 실점 `RA`, 승률 `WPct = W/(W+L)`을 계산했다. 팀 자료는 한 시즌에 (팀, 연도)가 자연스럽게 유일해서, 선수 자료처럼 이적 때문에 같은 키가 두 번 찍히는 문제가 없다. 로그 득실비 `lr = log(RS/RA)`는 뒤의 로지스틱 회귀에서 설명변수로 쓰려고 여기서 미리 만들어 뒀다. 박스스코어 변수 묶음(`vars_box`)도 문제 2-2 이후에서 재활용하려고 한 번에 정의해 둔다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+library(tidyverse)
+library(Lahman)
+library(MASS)
+
+# 박스스코어 설명변수 (문제 2-2 이후에서 재사용)
+vars_box <- c(
+    "H", "X2B", "X3B", "HR", "BB", "SO", "CS", "HBP", "SF",
+    "ERA", "CG", "SHO", "IPouts", "HA", "HRA", "BBA", "SOA",
+    "E", "DP", "FP", "SV"
+)
+
+# 2010-2025 (2020 제외) 팀-시즌 자료
+recent <- Teams %>%
+    filter(yearID >= 2010, yearID <= 2025, yearID != 2020) %>%
+    mutate(
+        RS = R,
+        WPct = W / (W + L),
+        logRS = log(R),
+        logRA = log(RA),
+        lr = log(RS / RA)
+    ) %>%
+    dplyr::select(
+        yearID, teamID, lgID, W, L, G, WPct, RS, RA,
+        logRS, logRA, lr, all_of(vars_box)
+    )
+
+cat("관측치:", nrow(recent), " 연도:", paste(range(recent$yearID), collapse = "-"), "\n")
+```
+
+## Python
+
+```{python}
+import polars as pl
+
+# R에서 정리한 recent를 reticulate로 그대로 받음 (열 이름, 수록 연도까지 R과 동일)
+recent = r.recent.copy()
+print("관측치:", len(recent), " 연도:", recent["yearID"].min(), "-", recent["yearID"].max())
+```
+
+:::
+
+#### (1) Bill James 모형의 비선형 최소제곱 적합
+
+`nls()` 방식을 사용해 $WPct = 1/(1+(RA/RS)^k)$를 적합했다. 비선형 모수 $k$의 신뢰구간은 R에서는 프로파일 우도 기반의 `confint()`로, Python에서는 `curve_fit`이 돌려주는 공분산행렬에서 Wald 방식으로 뽑았다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+fit_nls <- nls(WPct ~ 1 / (1 + (RA / RS)^k), data = recent, start = list(k = 2))
+coef(fit_nls)
+confint(fit_nls)
+```
+
+## Python
+
+```{python}
+import numpy as np
+from scipy.optimize import curve_fit
+from scipy import stats
+
+def bill_james(ratio, k):
+    # ratio = RA / RS
+    return 1 / (1 + ratio**k)
+
+ratio = (recent["RA"] / recent["RS"]).to_numpy()
+popt, pcov = curve_fit(bill_james, ratio, recent["WPct"].to_numpy(), p0=[2])
+k_hat = popt[0]
+se_k = np.sqrt(pcov[0, 0])
+ci = stats.t.interval(0.95, len(recent) - 1, loc=k_hat, scale=se_k)
+print(f"k = {k_hat:.4f}, 95% CI = ({ci[0]:.4f}, {ci[1]:.4f})")
+```
+
+:::
+
+점추정치는 $\hat k = 1.753$, 95% 신뢰구간은 대략 (1.70, 1.81)이다.
+
+#### (2) $\beta_1 \approx k$인 절편 없는 로지스틱 회귀
+
+힌트대로 로짓을 풀어 보면 모형 구조가 그대로 로지스틱 회귀로 떨어진다. $WPct = 1/(1+(RA/RS)^k)$의 양변에 로짓을 씌우면
+$$
+\operatorname{logit}(WPct) = \log\frac{WPct}{1-WPct} = \log\left(\frac{RS}{RA}\right)^k = k \cdot \log\frac{RS}{RA}
+$$
+
+가 되니, `WPct`를 `lr = log(RS/RA)` 하나에만 회귀시키되 절편을 빼면 그 기울기가 곧 $k$다. 승률은 비율이라 (승, 패) 두 열짜리 행렬 `cbind(W, L)`을 반응으로 줘서 시즌마다 다른 경기 수(이항 시행 횟수)를 자연스럽게 반영하도록 했다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+fit_log1 <- glm(cbind(W, L) ~ lr - 1, family = binomial, data = recent)
+summary(fit_log1)$coef
+confint(fit_log1)
+cat(
+    "Residual deviance:", round(deviance(fit_log1), 2),
+    "on", df.residual(fit_log1), "df\n"
+)
+```
+
+## Python
+
+```{python}
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+# 'W + L ~ ...' 형태로 두 열(성공=W, 실패=L) 이항 반응 지정
+fit_log1 = smf.glm("W + L ~ lr - 1", data=recent, family=sm.families.Binomial()).fit()
+print(fit_log1.summary().tables[1])
+print("Residual deviance:", round(fit_log1.deviance, 2), "on", int(fit_log1.df_resid), "df")
+```
+
+:::
+
+기울기 추정치는 1.753으로, (1)의 비선형 최소제곱 $\hat k$와 소수점 셋째 자리까지 똑같다. 같은 모수를 두 방식으로 추정했으니 당연하다면 당연한데, 한쪽은 승률에 정규오차를 가정한 최소제곱이고 다른 쪽은 경기 수로 가중된 이항 최대우도라서 추정의 방식이 다르지만 점추정치가 이렇게까지 붙는 게 인상적이다. 신뢰구간은 좀 다르다. 로지스틱 쪽이 (1.66, 1.84)로 nls의 (1.70, 1.81)보다 조금 넓다. 로지스틱은 `cbind(W, L)`로 각 시즌을 162경기 안팎의 이항 시행으로 자동 가중하면서 표준오차를 보수적으로 잡는 반면, nls는 450개의 시즌 승률을 가중치 없이 다 같은 무게로 다루기 때문이다. 한편 같은 로지스틱 안에서도 R `confint()`는 프로파일 우도 구간을, Python 요약표의 `[0.025, 0.975]`는 Wald 구간을 보여 주는데, 이 자료에선 (1.6639, 1.8427)과 (1.664, 1.843)으로 소수점 넷째 자리에서야 갈릴 만큼 사실상 겹친다. 경기 수가 많아 우도가 거의 정규형이라 두 방식이 만난 것이다.
+
+#### (3) 모형 적합 진단
+
+세 가지 진단 가운데 i과 ii를 수행했다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+# (i) 잔차 이탈도의 카이제곱 적합결여 검정 p-값
+pchisq(deviance(fit_log1), df.residual(fit_log1), lower.tail = FALSE)
+```
+
+## Python
+
+```{python}
+from scipy.stats import chi2
+
+# (i) 잔차 이탈도의 카이제곱 적합결여 검정 p-값
+print(chi2.sf(fit_log1.deviance, fit_log1.df_resid))
+```
+
+:::
+
+먼저 잔차 이탈도(residual deviance)를 계산해보면 검정의 p-값이 사실상 1로 나오는데, 모형을 기각할 근거가 전혀 없다는 뜻이다. 오히려 이탈도가 자유도보다 이렇게 작다는 건, 실제 팀 승수가 "독립적인 162번의 동전 던지기"가 만들어낼 이항 변동보다 Bill James 예측 주위에 더 촘촘히 모여 있다는 신호다. 가벼운 과소산포인데, 우리 목적인 "승률과 득실비의 관계를 한 모수로 잡아내기"에는 흠이 되지 않는다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+# (ii) deviance residuals vs linear predictor
+diag_df <- recent %>%
+    mutate(
+        eta = predict(fit_log1, type = "link"),
+        dres = residuals(fit_log1, type = "deviance")
+    )
+
+ggplot(diag_df, aes(eta, dres)) +
+    geom_point(alpha = 0.4) +
+    geom_hline(yintercept = 0, color = "firebrick", linetype = "dashed") +
+    labs(
+        x = "Linear predictor (eta)", y = "Deviance residuals",
+        title = "Deviance residuals vs linear predictor"
+    ) +
+    theme_minimal()
+```
+
+## Python
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4
+from plotnine import *
+
+diag_df = recent.copy()
+mu = fit_log1.predict()                          # 적합 확률 (mu)
+diag_df["eta"] = fit_log1.model.family.link(mu)  # 연결함수로 선형 예측변수 복원
+diag_df["dres"] = fit_log1.resid_deviance        # 이탈도 잔차
+
+(
+    ggplot(diag_df, aes("eta", "dres"))
+    + geom_point(alpha=0.4)
+    + geom_hline(yintercept=0, color="firebrick", linetype="dashed")
+    + labs(x="Linear predictor (eta)", y="Deviance residuals",
+           title="Deviance residuals vs linear predictor")
+    + theme_minimal()
+).show()
+```
+
+:::
+
+이탈도 잔차를 선형 예측변수에 대해 그린 그림에서는 점들이 0을 가운데 두고 위아래로 고르게 흩어져 있다. $\eta$가 커지는 쪽으로 휜다거나 분산이 벌어지는 패턴이 안 보이니, 한 모수짜리 함수 형태로 충분하다는 얘기다. 이탈도 해석(i)과 잔차 산점도(ii) 두 진단이 같은 결론을 가리킨다.
+
+#### (4) `log(RA)`와 `log(RS)`를 따로 넣은 로지스틱 회귀
+
+절편 없이 `logRA`와 `logRS`를 각각 따로 설명변수로 넣으면, 두 계수가 한 모수로 묶이지 않고 자유롭게 추정된다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+fit_log2 <- glm(cbind(W, L) ~ logRA + logRS - 1, family = binomial, data = recent)
+summary(fit_log2)$coef
+```
+
+## Python
+
+```{python}
+fit_log2 = smf.glm("W + L ~ logRA + logRS - 1", data=recent,
+                   family=sm.families.Binomial()).fit()
+print(fit_log2.summary().tables[1])
+```
+
+:::
+
+`logRA` 계수는 -1.754, `logRS` 계수는 +1.753으로 나왔다. 크기는 거의 같고 부호만 반대다. 모형식의 로짓이 $k(\log RS - \log RA)$이니, 두 계수를 따로 풀어 줘도 자료가 알아서 $(+k, -k)$ 쪽으로 수렴한다. 결국 (1)의 비선형 최소제곱($\hat k = 1.753$), (2)의 단일 로지스틱 기울기(1.753), (4)의 두 계수 크기($\approx 1.753$)가 모두 같은 결과가 나왔다. 승률이 득점과 실점에 따로따로 휘둘리는 게 아니라 오직 그 비($RS/RA$)로만 결정된다는 Bill James의 가정이 제약을 풀어 준 모형에서도 자료에 의해 확인되었다.
+
 ## 문제 2-2
 
-`WPct`를 반응변수로, `logRS`, `logRA`, `H`, `X2B`, `X3B`, `HR`, `BB`, `SO`, `CS`, `HBP`, `SF`, `ERA`, `CG`, `SHO`, `IPouts`, `HA`, `HRA`, `BBA`, `SOA`, `E`, `DP`, `FP`, `SV`를 설명변수로 하는 절편항이 있는 로지스틱 회귀 모형을 적합하고 AIC를 기준으로 하는 단계별(stepwise) 변수선택을 적용하라. 변수선택 후 남은 변수들을 모두 모형에 남길지 일부를 제거할지 다시 판단하라. 최종적으로 선택된 모형을 문제1의 모형과 비교하라. 
+`WPct`를 반응변수로, `logRS`, `logRA`, `H`, `X2B`, `X3B`, `HR`, `BB`, `SO`, `CS`, `HBP`, `SF`, `ERA`, `CG`, `SHO`, `IPouts`, `HA`, `HRA`, `BBA`, `SOA`, `E`, `DP`, `FP`, `SV`를 설명변수로 하는 절편항이 있는 로지스틱 회귀 모형을 적합하고 AIC를 기준으로 하는 단계별(stepwise) 변수선택을 적용하라. 변수선택 후 남은 변수들을 모두 모형에 남길지 일부를 제거할지 다시 판단하라. 최종적으로 선택된 모형을 문제1의 모형과 비교하라.
 
 ### 답안
 
+문제 2-1과 같은 `recent` 자료에 이번엔 절편을 넣고 23개 설명변수를 전부 투입한 뒤 `stepAIC`로 양방향 선택을 돌렸다. R에는 `MASS::stepAIC`가 있지만 Python의 statsmodels에는 대응되는 함수가 없어서, AIC가 가장 많이 줄어드는 변수를 하나씩 떨궈 가는 후진 제거 함수를 직접 짜서 두 언어 결과를 맞췄다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+f_full <- as.formula(
+    paste("cbind(W, L) ~ logRS + logRA +", paste(vars_box, collapse = " + "))
+)
+fit_full <- glm(f_full, family = binomial, data = recent)
+cat(
+    "full model: residual deviance", round(deviance(fit_full), 2),
+    "on", df.residual(fit_full), "df, AIC", round(AIC(fit_full), 1), "\n"
+)
+
+fit_step <- stepAIC(fit_full, trace = FALSE)
+formula(fit_step)
+round(summary(fit_step)$coef, 4)
+```
+
+## Python
+
+```{python}
+def step_aic_backward(df, lhs, predictors, family):
+    """AIC가 가장 작아지는 변수를 하나씩 제거하는 후진 선택 (R stepAIC와 대응)."""
+    cur = list(predictors)
+
+    def fit(terms):
+        formula = f"{lhs} ~ " + (" + ".join(terms) if terms else "1")
+        return smf.glm(formula, data=df, family=family).fit()
+
+    best_aic = fit(cur).aic
+    improved = True
+    while improved and cur:
+        improved = False
+        cand = sorted((fit([x for x in cur if x != t]).aic, t) for t in cur)
+        if cand and cand[0][0] < best_aic:
+            best_aic, drop = cand[0]
+            cur = [x for x in cur if x != drop]
+            improved = True
+    return fit(cur), cur
+
+preds = ["logRS", "logRA"] + r.vars_box
+fit_full = smf.glm("W + L ~ " + " + ".join(preds), data=recent,
+                   family=sm.families.Binomial()).fit()
+print("full model: residual deviance", round(fit_full.deviance, 2),
+      "on", int(fit_full.df_resid), "df, AIC", round(fit_full.aic, 1))
+
+fit_step, terms_step = step_aic_backward(recent, "W + L", preds, sm.families.Binomial())
+print("selected:", terms_step)
+print(fit_step.summary().tables[1])
+```
+
+:::
+
+AIC 단계별 선택은 23개에서 `logRS`, `logRA`, `CG`(완투), `SHO`(완봉), `SV`(세이브) 다섯 개만 남겼고, 두 언어가 똑같은 다섯을 골랐다. 그런데 문제가 요구한 대로, 남은 변수를 정말 다 둘지는 한 번 더 따져 봐야 한다. 계수의 Wald 검정을 보면 `logRS`(p≈0), `logRA`(p≈0), `SV`(p≈0)는 강하게 유의하지만 `CG`(p≈0.13)와 `SHO`(p≈0.065)는 5%에서 유의하지 않다. AIC는 표본이 크면 변수를 좀 헐겁게 남기는 버릇이 있어서, 이 둘을 빼도 되는지 우도비 검정으로 직접 확인했다. 먼저 둘을 한꺼번에 빼 보고, 그다음 하나씩 떼 본다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+# (i) CG, SHO를 함께 뺀 모형과 우도비 검정으로 비교
+fit_drop2 <- glm(cbind(W, L) ~ logRS + logRA + SV, family = binomial, data = recent)
+anova(fit_drop2, fit_step, test = "Chisq")
+
+# (ii) 둘 중 개별 유의성이 더 약한 CG만 제거
+fit_final <- glm(cbind(W, L) ~ logRS + logRA + SHO + SV, family = binomial, data = recent)
+anova(fit_final, fit_step, test = "Chisq")
+round(summary(fit_final)$coef, 4)
+```
+
+## Python
+
+```{python}
+from scipy.stats import chi2
+
+def lrt(reduced, full):
+    stat = reduced.deviance - full.deviance
+    df = int(reduced.df_resid - full.df_resid)
+    return stat, df, chi2.sf(stat, df)
+
+# (i) CG, SHO를 함께 제거
+fit_drop2 = smf.glm("W + L ~ logRS + logRA + SV", data=recent,
+                    family=sm.families.Binomial()).fit()
+print("drop CG+SHO: LR=%.3f, df=%d, p=%.3f" % lrt(fit_drop2, fit_step))
+
+# (ii) CG만 제거
+fit_final = smf.glm("W + L ~ logRS + logRA + SHO + SV", data=recent,
+                    family=sm.families.Binomial()).fit()
+print("drop CG only: LR=%.3f, df=%d, p=%.3f" % lrt(fit_final, fit_step))
+print(fit_final.summary().tables[1])
+```
+
+:::
+
+개별 Wald 검정만 보면 `CG`와 `SHO`를 둘 다 떼어도 될 것 같지만, 막상 둘을 함께 뺀 모형과 우도비 검정을 해 보면 p-값이 0.046으로 5%에서 (아슬아슬하게) 유의하다. 즉 둘을 동시에 버리면 적합이 유의하게 나빠진다. 완투(`CG`)와 완봉(`SHO`)이 둘 다 "선발이 상대를 끝까지 틀어막았다"는 비슷한 정보를 담고 있어서, 함께 모형에 있을 때는 서로의 유의성을 갉아먹어 각자가 약해 보였던 것이다. 그래서 개별 유의성이 더 약한 `CG`만 떼었더니, `CG` 단독 제거의 우도비 p-값은 0.13으로 적합을 해치지 않았다. 확인할 만한 부분은 `CG`를 빼자마자 `SHO` 계수가 p=0.050으로 5% 경계선까지 올라온다는 점이다. 그래서 최종 모형은 `logRS`, `logRA`, `SHO`, `SV` 네 변수에 절편이 있는 형태로 정했고, 이제 남은 변수는 전부 5%에서 유의하다.
+
+이걸 2-1의 Bill James 모형과 비교하자면, 2-1 모형은 절편이 없고 `logRS`와 `logRA`의 계수가 $(+k, -k)$로 크기까지 강제로 묶여 있었다. 반면 최종 모형에서는 `logRS` 계수(약 1.61)와 `logRA` 계수(약 -1.32)의 크기가 같지 않다. 득점 쪽 가중치가 실점 쪽보다 조금 크게 추정되니, 승리에 대한 공격과 수비의 기여가 완전한 대칭은 아니라는 신호로 읽힌다. 게다가 완봉(`SHO`)과 세이브(`SV`)가 득실비만으로는 못 잡는 정보를 더해서, 같은 득실비라도 상대를 영봉으로 묶는 투수력이나 접전을 잠그는 불펜이 받쳐 주면 승수로 조금 더 잘 환산된다는 점을 짚어 준다. 그래도 큰 그림은 여전히 Bill James 모형이 더 나은 것 같다. 설명력의 대부분은 `logRS`(+)와 `logRA`(-)라는 득실비 신호에서 나오고, 박스스코어 변수들은 거기에 자잘한 보정을 얹을 뿐이다.
+
 ## 문제 2-3
 
-1.  `W`(승리 횟수)를 반응변수로 하여 문제 2-2의 분석을 실시하되 포아송 회귀모형을 사용하라. 결과를 문제 2-2의 모형과 비교하라. 
+1.  `W`(승리 횟수)를 반응변수로 하여 문제 2-2의 분석을 실시하되 포아송 회귀모형을 사용하라. 결과를 문제 2-2의 모형과 비교하라.
 
 2.  `W`를 반응변수로 하여 문제2의 분석을 실시하되 음이항 회귀모형을 사용하라. 모형 적합 시 오류가 발생하면 이유를 파악해서 보고하라.
 
 ### 답안
+
+#### (1) 포아송 회귀
+
+이번엔 비율 `WPct` 대신 승수 `W`를 직접 반응변수로 두고, 같은 23개 설명변수에 포아송 로그선형 모형을 적합한 뒤 `stepAIC`로 변수를 골랐다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+f_pois <- as.formula(paste("W ~ logRS + logRA +", paste(vars_box, collapse = " + ")))
+fit_pois <- glm(f_pois, family = poisson, data = recent)
+cat(
+    "residual deviance", round(deviance(fit_pois), 2),
+    "on", df.residual(fit_pois), "df, AIC", round(AIC(fit_pois), 1), "\n"
+)
+
+fit_pois_step <- stepAIC(fit_pois, trace = FALSE)
+formula(fit_pois_step)
+round(summary(fit_pois_step)$coef, 4)
+```
+
+## Python
+
+```{python}
+preds = ["logRS", "logRA"] + r.vars_box
+fit_pois = smf.glm("W ~ " + " + ".join(preds), data=recent,
+                   family=sm.families.Poisson()).fit()
+print("residual deviance", round(fit_pois.deviance, 2),
+      "on", int(fit_pois.df_resid), "df, AIC", round(fit_pois.aic, 1))
+
+fit_pois_step, terms_pois = step_aic_backward(recent, "W", preds, sm.families.Poisson())
+print("selected:", terms_pois)
+print(fit_pois_step.summary().tables[1])
+```
+
+:::
+
+포아송 모형이 고른 변수는 `logRS`, `ERA`, `CG`, `E`(실책), `SV` 다섯이다. 2-2의 최종 로지스틱(`logRS`, `logRA`, `SHO`, `SV`)과 나란히 놓으면, 득점(`logRS`)과 세이브(`SV`)가 양쪽 모두에서 살아남는다는 점이 같다. 갈리는 건 실점을 어느 변수로 받느냐인데, 로지스틱은 `logRA`로 받았고 포아송은 같은 실점 정보를 다르게 보는 `ERA`(평균자책점)로 받았으며, 거기에 수비 실책(`E`)이 한 자리 더 들어왔다. 계수를 읽는 척도도 다르다. 포아송은 $\log E[W]$에 대한 선형모형이라 `logRS` 계수가 "득점이 1% 늘면 기대 승수가 몇 % 변하나" 하는 탄력성처럼 읽히고, 로지스틱은 승리 오즈의 로그에 대한 효과였다. 결국 두 모형은 "많이 치고, 덜 내주고 실책 적게, 세이브 챙기면 승리가 는다"는 의미를 서로 다른 모수화로 보여준다.
+
+#### (2) 음이항 회귀
+
+같은 설명변수로 음이항 회귀(`MASS::glm.nb`)를 시도했다. 음이항 회귀는 강의록(MASS ch07)에서 R로만 다루고 `statsmodels` 예시가 없어, 이 항만 R로 작성했다. 음이항은 산포모수 $\theta$를 함께 추정하는데, 적합 과정에서 경고가 줄줄이 뜨고 $\theta$ 추정치가 비정상적으로 커진다. 그래서 경고 메시지와 $\theta$ 값을 직접 잡아서 찍어 봤다.
+
+```{r}
+# glm.nb의 경고를 직접 포착해서 출력
+nb_msgs <- character(0)
+fit_nb <- withCallingHandlers(
+    tryCatch(
+        MASS::glm.nb(f_pois, data = recent),
+        error = function(e) {
+            nb_msgs <<- c(nb_msgs, paste("Error:", conditionMessage(e)))
+            NULL
+        }
+    ),
+    warning = function(w) {
+        nb_msgs <<- c(nb_msgs, conditionMessage(w))
+        invokeRestart("muffleWarning")
+    }
+)
+cat("고유 경고 메시지:\n")
+print(unique(nb_msgs))
+if (!is.null(fit_nb)) {
+    cat(
+        "\ntheta =", format(fit_nb$theta, scientific = TRUE),
+        " SE(theta) =", format(fit_nb$SE.theta, scientific = TRUE), "\n"
+    )
+}
+```
+
+R에서는 "iteration limit reached", "alternation limit reached" 같은 경고가 반복해서 뜨면서 $\theta$ 추정치가 약 $1.1\times10^7$, 그러니까 사실상 무한대로 발산했다. 경고만 봐도 적합이 정상적으로 끝맺지 못했다는 게 드러난다.
+
+원인은 자료가 과소산포라는 데 있다. 음이항 분포는 평균보다 분산이 큰 과대산포(overdispersion) 계수 자료를 위한 모형이고, 그 분산이 $\operatorname{var}(W) = \mu + \mu^2/\theta$라 $\theta$가 작을수록 분산이 부풀려진다. 그런데 (1)에서 봤듯이 설명변수를 다 넣고 나면 승수의 조건부 변동이 포아송이 기대하는 것보다도 작다(잔차 이탈도 55.7 ≪ 426). 부풀릴 과대산포가 애초에 없으니 음이항이 포아송 쪽으로 수렴하려 들고, 그건 $\theta \to \infty$($\alpha = 1/\theta \to 0$)라는 분포족의 경계에 해당한다. 경계에서는 최대우도 추정치가 유한하게 존재하지 않으므로 반복 알고리즘이 갈 곳을 잃고 한계 횟수에서 멈춘다. 뒤집어 보면, 음이항이 이렇게 "실패"한다는 사실 자체가 이 자료엔 음이항이 필요한 과대산포가 없다는 진단이다. 포아송이, 혹은 승수가 경기 수에 묶인다는 점까지 살리려면 이항이 더 알맞은 모형이라는 얘기다.
 
 ## 문제 2-4
 
@@ -127,15 +666,65 @@ $$
 
 ### 답안
 
+문제 2-1에서 로짓을 풀었던 힌트를 그대로 한 번 더 쓴다. 지수 $k + g\,I$에 로짓을 씌우면
+$$
+\operatorname{logit}(WPct) = (k + g\,I)\log\frac{RS}{RA}
+= k \cdot \underbrace{\log\frac{RS}{RA}}_{lr} + g \cdot \underbrace{I\cdot\log\frac{RS}{RA}}_{lr:steroid}
+$$
+가 되어, `lr`과 "스테로이드 시대 지시변수 × `lr`" 두 항을 절편 없이 넣은 로지스틱 회귀로 떨어진다. `lr`의 계수가 $k$, 상호작용항의 계수가 $g$이고, $g=0$ 검정은 상호작용항 계수에 대한 보통의 Wald 검정으로 바로 끝난다. 자료는 1994–2005년과 2010–2025년을 합치되 2020년만 뺐다.
+
+::: {.panel-tabset}
+
+## R
+
+```{r}
+two_era <- Teams %>%
+    filter(
+        (yearID >= 1994 & yearID <= 2005) | (yearID >= 2010 & yearID <= 2025),
+        yearID != 2020
+    ) %>%
+    mutate(
+        WPct = W / (W + L),
+        lr = log(R / RA),
+        steroid = as.integer(yearID >= 1994 & yearID <= 2005)
+    ) %>%
+    dplyr::select(yearID, W, L, WPct, lr, steroid)
+
+cat(
+    "관측치:", nrow(two_era),
+    " (스테로이드 시대", sum(two_era$steroid), "/ 최근", sum(1 - two_era$steroid), ")\n"
+)
+
+fit_24 <- glm(cbind(W, L) ~ lr + lr:steroid - 1, family = binomial, data = two_era)
+summary(fit_24)$coef
+confint(fit_24)
+```
+
+## Python
+
+```{python}
+two_era = r.two_era.copy()
+print("관측치:", len(two_era))
+
+fit_24 = smf.glm("W + L ~ lr + lr:steroid - 1", data=two_era,
+                 family=sm.families.Binomial()).fit()
+print(fit_24.summary().tables[1])
+```
+
+:::
+
+`lr`의 계수(=$k$)는 1.753이고 상호작용항(=$g$)은 0.162, 표준오차 0.075, $z = 2.16$, p-값 0.031로 추정됐다. p-값이 0.05보다 작으니 5% 유의수준에서 $g = 0$이라는 귀무가설을 기각한다. 두 시대의 $k$가 유의하게 다르다고 볼 수 있다는 뜻이다.
+
+주목할 부분은 부호가 양수라는 점이다. 스테로이드 시대의 지수는 $k + g \approx 1.753 + 0.162 = 1.915$로 최근(1.753)보다 높다. 지수가 크다는 건 승률–득실비 곡선이 득실비 1 근방에서 더 가파르다는 뜻이라, 같은 크기의 득점 우위가 그 시절엔 더 큰 승률 차이로 환산됐다는 이야기가 된다. 풀어 말하면 1994–2005년에는 득실 차이가 승패를 좀 더 결정적으로 갈랐다. 다만 p-값이 0.031이라 5%에선 유의하지만 1% 문턱은 넘지 못하니, 차이가 있다고는 말하되 그 강도를 부풀리지는 않는 편이 정직하다. 신뢰구간은 R이 `confint()`의 프로파일 구간, Python이 Wald 구간이라 계산 방식은 다르지만, $g$의 구간이 R에서 (0.0151, 0.3081), Python에서 [0.015, 0.308]로 끝자리까지 사실상 같게 나왔다.
+
 # 3부  데이터 분석 기술
 
-숙제 2에서는 제출용 GitHub 저장소에 작업한 Quarto markdown 소스 파일(`hw02.qmd`)을 올리면 GitHub에서 자동으로 HTML 파일 및 주피터 노트북 파일(`.ipynb`)을 만들고 이것을 [GitHub Pages](https://docs.github.com/en/pages/quickstart)에서 웹페이지로 보이도록 설정하였다. 
-여기서는 숙제 3 제출용 GibHub 저장소에 작업한 Quarto markdown 소스 파일(`hw03.qmd`)을 올리면 숙제 2에서의 작업 프로세스에 더해 자동 생성된 `.ipynb` 파일을 컨테이너화하여, GitHub에서 자동 생성된 컨테이너 이미지를 Binder 서비스를 이용하여 온라인에서 주피터 노트북 파일을 사용할 수 있도록 한다.
+숙제 2에서는 제출용 GitHub 저장소에 Quarto 소스(`hw02.qmd`)를 올리면 GitHub가 알아서 HTML과 주피터 노트북(`.ipynb`)을 만들고 이를 [GitHub Pages](https://docs.github.com/en/pages/quickstart)로 띄우도록 했다. 숙제 3에서는 거기에 한 단계를 더 얹는다. 렌더로 자동 생성된 `.ipynb`를 컨테이너 이미지에 담아 GitHub Actions가 GHCR(GitHub Container Registry)로 올리고, 그 이미지를 [Binder](https://mybinder.org)가 그대로 받아 온라인에서 노트북을 실행할 수 있게 만드는 것이 목표다.
 
 ## 문제 3-1. Dockerfile 설정
 
-로컬 저장소 최상위 디렉토리에 아래와 같은 `Dockerfile` 파일을 추가한다. 
-```{yml}
+로컬 저장소 최상위 디렉토리에 아래와 같은 `Dockerfile` 파일을 추가한다.
+```yaml
 # 1. 기반 이미지 설정
 FROM rocker/tidyverse:4.4.0
 
@@ -174,7 +763,7 @@ ENV NB_UID=1000
 RUN usermod -l ${NB_USER} rstudio && \
     usermod -d /home/${NB_USER} -m ${NB_USER} && \
     chown -R ${NB_USER} /opt/conda /home/${NB_USER}
-    
+
 # 8. 노트북 파일 복사
 COPY _site/hw03.ipynb /home/${NB_USER}/hw03.ipynb
 RUN chown ${NB_USER}:users /home/${NB_USER}/hw03.ipynb
@@ -184,7 +773,6 @@ WORKDIR /home/${NB_USER}
 
 # Binder가 기대하는 포트
 EXPOSE 8888
-
 ```
 
 ### 답안
@@ -193,7 +781,7 @@ EXPOSE 8888
 
 숙제 2에서 만들었던 `publish.yml`을 수정하여 기존의 배포 단계 끝에 Docker 컨테이너 이미지를 빌드하고 Github Container Registry (GHCR)에 푸시하는 단계를 추가한다.
 
-```{yml}
+```yaml
 # ... (기존 Quarto Render 단계 이후)
 
       - name: Log in to GitHub Container Registry
@@ -219,7 +807,7 @@ GitHub Page를 사용하여 저장소를 웹페이지로 활용하는 부분은 
 
 웹페이지에서 노트북을 내려받는 대신 [Binder](mybinder.org) 서비스를 이용하여 온라인으로 노트북을 실행할 수 있도록 위해 `README.md` 파일을 로컬 저장소 최상위 디렉토리에 다음과 같이 만들자.
 
-```{markdown}
+```markdown
 # 숙제 3
 
 이름: [아무개]
@@ -227,7 +815,7 @@ GitHub Page를 사용하여 저장소를 웹페이지로 활용하는 부분은 
 
 이 숙제의 상세 분석 결과는 아래 링크에서 확인하실 수 있습니다.
 
-* [분석 리포트 (HTML)](./hw03.html) 
+* [분석 리포트 (HTML)](./hw03.html)
 * [주피터 노트북 (ipynb)](https://mybinder.org/v2/gh/<유저명>/snu-stat/<repo명>/gh-pages?filepath=hw03.ipynb
 ```
 
@@ -236,4 +824,3 @@ GitHub Page를 사용하여 저장소를 웹페이지로 활용하는 부분은 
 작업을 GitHub 원격 저장소로 push한 후 숙제 2 문제 3-3의 3, 4번 과정을 반복하라.
 
 ### 답안
-

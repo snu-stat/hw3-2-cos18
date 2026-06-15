@@ -37,3 +37,12 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+/.quarto/
+**/*.quarto_ipynb
+
+# Quarto 렌더 산출물 (GitHub Actions가 재생성하여 gh-pages로 배포)
+/_site/
+
+# macOS
+.DS_Store
