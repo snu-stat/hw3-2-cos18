@@ -67,16 +67,18 @@ jobs:
           publish_dir: ./_site
           publish_branch: gh-pages
 
+      # 조직(snu-stat) 네임스페이스 대신 본인 개인 네임스페이스(cos18)로 푸시한다.
+      # 개인 네임스페이스에 쓰려면 write:packages 권한을 가진 PAT(시크릿 GHCR_PAT)가 필요하다.
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: cos18
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/my-r-env:latest
+          tags: ghcr.io/cos18/my-r-env:latest
