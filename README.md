@@ -8,7 +8,7 @@
 이 숙제의 상세 분석 결과는 아래 링크에서 확인하실 수 있습니다.
 
 * [분석 리포트 (HTML)](./hw03.html)
-* [주피터 노트북 (Binder)](https://mybinder.org/v2/ghcr/cos18/my-r-env/latest?filepath=hw03.ipynb)
+* [주피터 노트북 (Binder)](https://mybinder.org/v2/gh/snu-stat/hw3-2-cos18/gh-pages?filepath=hw03.ipynb)
 
 ### 안내사항
 
@@ -27,4 +27,4 @@
 
 채점 기준 HTML 파일은 위의 [분석 리포트 (HTML)](./hw03.html)이다.
 
-위 Binder 링크를 누르면 노트북을 온라인에서 바로 실행할 수 있다. GitHub Actions가 `Dockerfile`로 빌드해 GHCR(`ghcr.io/cos18/my-r-env:latest`)에 올린 컨테이너 이미지를 Binder가 그대로 받아서 R + Python(reticulate) 환경을 띄우고, 이미지 안에 함께 복사해 둔 `hw03.ipynb`를 연다.
+위 Binder 링크를 누르면 노트북을 온라인에서 바로 실행할 수 있다. GitHub Actions가 분석 환경(conda + R 패키지)을 담은 이미지를 빌드해 GHCR(`ghcr.io/cos18/my-r-env`, 환경 해시를 태그로 사용)에 올리고, `gh-pages` 브랜치에는 그 이미지를 `FROM` 하는 간단한 `Dockerfile`과 `hw03.ipynb`를 함께 배포한다. Binder는 이 `gh-pages`를 받아 미리 만들어 둔 환경 이미지를 그대로 끌어오고 노트북만 얹어 R + Python(reticulate) 환경으로 띄운다. 환경이 바뀌지 않으면 같은 태그의 이미지가 GHCR에 이미 있으므로 재빌드 없이 재사용된다.

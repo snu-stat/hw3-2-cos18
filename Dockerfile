@@ -24,7 +24,7 @@ ENV PATH=$CONDA_DIR/bin:$PATH
 COPY .github/python-packages.txt /tmp/python-packages.txt
 RUN conda create -n r-reticulate -c conda-forge --override-channels python=3.10 -y && \
     conda install -n r-reticulate -c conda-forge --override-channels -y \
-        --file /tmp/python-packages.txt jupyterlab notebook
+    --file /tmp/python-packages.txt jupyterlab notebook
 
 # r-reticulate 환경을 기본 PATH로 둬서 jupyter/python이 분석 패키지를 갖춘
 # 이 환경을 가리키게 한다 (IRkernel::installspec과 Binder의 python3 커널 모두 이 환경 사용).
@@ -46,10 +46,8 @@ RUN usermod -l ${NB_USER} rstudio && \
     usermod -d /home/${NB_USER} -m ${NB_USER} && \
     chown -R ${NB_USER} /opt/conda /home/${NB_USER}
 
-# 8. 노트북 파일 복사
-COPY _site/hw03.ipynb /home/${NB_USER}/hw03.ipynb
-RUN chown ${NB_USER}:users /home/${NB_USER}/hw03.ipynb
-
+# 노트북은 이 환경 이미지에 굽지 않는다. Binder가 gh-pages의 간단한 Dockerfile에서
+# 이 이미지를 FROM 한 뒤 그때그때의 hw03.ipynb를 COPY 한다(환경/노트북 분리).
 USER ${NB_USER}
 WORKDIR /home/${NB_USER}
 

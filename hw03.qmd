@@ -719,7 +719,7 @@ print(fit_24.summary().tables[1])
 
 # 3부  데이터 분석 기술
 
-숙제 2에서는 제출용 GitHub 저장소에 Quarto 소스(`hw02.qmd`)를 올리면 GitHub가 알아서 HTML과 주피터 노트북(`.ipynb`)을 만들고 이를 [GitHub Pages](https://docs.github.com/en/pages/quickstart)로 띄우도록 했다. 숙제 3에서는 거기에 한 단계를 더 얹는다. 렌더로 자동 생성된 `.ipynb`를 컨테이너 이미지에 담아 GitHub Actions가 GHCR(GitHub Container Registry)로 올리고, 그 이미지를 [Binder](https://mybinder.org)가 그대로 받아 온라인에서 노트북을 실행할 수 있게 만드는 것이 목표다.
+숙제 2에서는 제출용 GitHub 저장소에 Quarto 소스(`hw02.qmd`)를 올리면 GitHub가 알아서 HTML과 주피터 노트북(`.ipynb`)을 만들고 이를 [GitHub Pages](https://docs.github.com/en/pages/quickstart)로 띄우도록 했다. 숙제 3에서는 거기에 한 단계를 더 얹는다. 분석 환경(conda + R 패키지)을 담은 컨테이너 이미지를 GitHub Actions가 GHCR(GitHub Container Registry)에 올리고, `gh-pages`에는 그 이미지를 `FROM` 하는 얇은 `Dockerfile`과 노트북을 함께 배포해, [Binder](https://mybinder.org)가 미리 만들어 둔 이미지를 그대로 받아 온라인에서 `hw03.ipynb`를 실행할 수 있게 만드는 것이 목표다.
 
 ## 문제 3-1. Dockerfile 설정
 
@@ -777,9 +777,9 @@ EXPOSE 8888
 
 ### 답안
 
-위에서 제공된 `Dockerfile` 원본에 일부 수정사항을 반영해서 커밋했다. `ENV RETICULATE_PYTHON`으로 Python 경로를 박아 둔 덕분에, 이전 과제에서부터 설정해놓았던 setup 청크에 넣은 `Sys.getenv("RETICULATE_PYTHON")` 분기가 컨테이너 안에서 이 값을 집어 들어 로컬에서와 똑같이 reticulate가 돈다. 그리고 `COPY _site/hw03.ipynb`는 빌드 시점에 `_site/hw03.ipynb`가 이미 만들어져 있어야 하는데, 뒤이어 나올 워크플로우에서 Quarto 렌더를 먼저 돌린 다음 도커 빌드를 하므로 순서가 맞는다.
+위에서 제공된 `Dockerfile` 원본에 몇 가지 수정을 반영해 커밋했다. `ENV RETICULATE_PYTHON`으로 Python 경로를 고정해, 이전 과제에서부터 setup 청크에 넣어 둔 `Sys.getenv("RETICULATE_PYTHON")` 분기가 컨테이너 안에서 이 값을 집어 로컬과 똑같이 reticulate가 돌게 했다. 빌드 중 두 가지 오류를 만나 손봤는데, 하나는 `IRkernel`이 의존하는 `pbdZMQ`가 `libzmq.so.5`를 못 찾는 문제라 시스템 패키지에 `libzmq3-dev`를 추가했고, 다른 하나는 conda가 기본 채널 약관(ToS) 미동의로 멈추는 문제라 `-c conda-forge --override-channels`로 conda-forge만 쓰게 했다. 패키지는 이전 `publish.yml`과 동일한 두 언어의 `*-packages.txt`을 그대로 읽어 설치하도록 바꿔, CI와 이미지가 같은 목록을 보게 했다.
 
-또한 이전 `publish.yml`에서 사용중인 두 언어의 `*-packages.txt`을 사용해 패키지를 설치하도록 수정하였다.
+원본 템플릿은 `COPY _site/hw03.ipynb`로 노트북을 이미지에 구워 넣었지만, 그러면 노트북이 바뀔 때마다 무거운 환경 이미지를 통째로 다시 빌드해야 한다. 그래서 이 `Dockerfile`은 분석 환경만 담는 이미지로 두고 노트북은 복사하지 않았다. 노트북은 뒤(문제 3-3)에서 Binder가 이 이미지를 `FROM` 한 간단한 `Dockerfile`로 그때그때 얹는다.
 
 ## 문제 3-2. GitHub Actions 워크플로우 수정
 
@@ -805,7 +805,9 @@ EXPOSE 8888
 
 ### 답안
 
-숙제 2의 `publish.yml`(Quarto 렌더 후 `gh-pages`로 배포하던 워크플로우) 끝에, 문제에서 준 GHCR 로그인·빌드·푸시 단계를 그대로 이어 붙였다. 이때 현재 리포지토리의 경우 `snu-stat`으로 되어있어 `ghcr.io`에 해당 계정명으로 업로드할 수가 없다. 따라서 해당 부분을 내 계정명으로 수정하고 내 토큰을 직접 사용하도록 수정하여 직접 가져올 수 있도록 했다. 이때 이 토큰의 경우 30일 동안만 유효하므로, 이후 다시 작동시킬려면 토큰을 연장하거나 재생성해 repository settings에 수정해야 한다.
+숙제 2의 `publish.yml`(Quarto 렌더 후 `gh-pages`로 배포하던 워크플로우) 끝에, 문제에서 준 GHCR 로그인·빌드·푸시 단계를 이어 붙였다. 이때 현재 리포지토리가 `snu-stat` 조직 소속이라 자동 발급되는 `GITHUB_TOKEN`으로는 `ghcr.io/snu-stat/...`에 패키지를 만들 권한이 없어 푸시가 막힌다(Classroom 조직 제한). 그래서 푸시 대상을 내 개인 네임스페이스 `ghcr.io/cos18/my-r-env`로 바꾸고, `write:packages` 권한을 가진 개인 토큰(PAT)을 시크릿 `GHCR_PAT`로 등록해 그걸로 로그인하도록 했다. 이 토큰은 유효기간이 있어 만료되면 재발급해 저장소 시크릿을 갱신해야 한다.
+
+또 커밋마다 이미지를 통째로 다시 빌드하지 않도록, `Dockerfile`과 두 `*-packages.txt`의 해시 앞 6글자를 이미지 태그로 쓴다. 환경이 그대로면 같은 태그가 GHCR에 이미 있으므로 `docker buildx imagetools inspect`로 존재를 확인해 빌드 단계를 건너뛴다. 노트북은 이미지에 굽지 않으니, 배포 직전에 `_site/Dockerfile`을 `FROM ghcr.io/cos18/my-r-env:<해시>` + `COPY hw03.ipynb` 형태로 만들어 `gh-pages`에 함께 올린다(다음 문제에서 Binder가 이걸 쓴다).
 
 ![](fig/result-3-2-1.png)
 
@@ -837,7 +839,7 @@ GitHub Page를 사용하여 저장소를 웹페이지로 활용하는 부분은 
 
 `README.md`에 이름·학번과 함께 분석 리포트(HTML)와 노트북(Binder) 링크 절을 더했다. 노트북은 다운로드가 아니라 Binder URL로 걸었고, GitHub Classroom 배지와 안내사항은 그대로 두었다. `publish.yml`의 "Prepare README as Index" 단계가 이 `README.md`를 `index.md`로 복사해 Pages 첫 화면으로 쓴다.
 
-Binder 링크는 문제에 적힌 골격(`https://mybinder.org/v2/gh/...gh-pages`)을 그대로 쓰지 않고 `ghcr` 형식으로 바꿨다. `v2/gh/<...>/gh-pages` 형식은 Binder가 그 브랜치를 직접 받아 그 자리에서 이미지를 빌드(repo2docker)하는 방식인데, 우리 `gh-pages` 브랜치에는 렌더 산출물만 올라가고 `Dockerfile`은 없으므로 R + reticulate 환경이 잡히지 않는다. 무엇보다 README 안내사항 8번이 "초기 build 후 사이트를 접속할 때 이미 만들어진 my-r-env 패키지의 이미지를 사용한다"라고 못 박고 있고, 문제 3-1의 새 `Dockerfile`이 노트북까지 이미지 안에 복사해 넣도록 바뀐 것도 미리 빌드된 GHCR 이미지를 그대로 띄우는 흐름을 전제한 것이다. 그래서 GHCR 이미지를 직접 받는 `https://mybinder.org/v2/ghcr/cos18/my-r-env/latest?filepath=hw03.ipynb`가 의도에 맞는 링크다. 실제 `README.md`의 링크 부분은 다음과 같다.
+Binder 링크는 처음에 GHCR 이미지를 바로 받는 `v2/ghcr/cos18/my-r-env/...` 형식으로 적었다가 접속해 보니 404가 났다. 확인해 보니 mybinder.org에는 레지스트리 이미지를 URL로 곧장 실행하는 `ghcr` 프로바이더가 없어서 그 주소 자체가 인식되지 않는다. mybinder에서 미리 만든 이미지를 쓰는 정석은, Binder가 실행할 브랜치에 그 이미지를 `FROM` 하는 간단한 `Dockerfile`을 두는 것이다(이때 `FROM` 태그로 `latest`는 repo2docker가 거부하므로 환경 해시 태그를 쓴다). 그래서 `publish.yml`이 `gh-pages`에 `FROM ghcr.io/cos18/my-r-env:<해시>` + `COPY hw03.ipynb`짜리 `Dockerfile`과 노트북을 함께 배포하고, 링크는 그 `gh-pages`를 가리키는 `gh` 형식으로 적었다. Binder는 이 간단한 `Dockerfile`을 빌드하면서 미리 만들어 둔 환경 이미지를 그대로 끌어오고(무거운 설치 없이 빠름) 노트북만 얹는다. 실제 `README.md`의 링크 부분은 다음과 같다.
 
 ```markdown
 # Homework 3
@@ -849,7 +851,5 @@ Binder 링크는 문제에 적힌 골격(`https://mybinder.org/v2/gh/...gh-pages
 이 숙제의 상세 분석 결과는 아래 링크에서 확인하실 수 있습니다.
 
 * [분석 리포트 (HTML)](./hw03.html)
-* [주피터 노트북 (Binder)](https://mybinder.org/v2/ghcr/cos18/my-r-env/latest?filepath=hw03.ipynb)
+* [주피터 노트북 (Binder)](https://mybinder.org/v2/gh/snu-stat/hw3-2-cos18/gh-pages?filepath=hw03.ipynb)
 ```
-
-여기까지 한 뒤 작업을 원격 저장소로 push하고 숙제 2 문제 3-3의 3, 4번 과정을 반복했다. 즉 Actions 탭에서 워크플로우(렌더·배포·컨테이너 푸시)가 모두 초록불로 끝났는지 보고, Settings > Pages에서 "Your site is live at ..." 안내가 뜨는지, 그 페이지의 Binder 링크를 눌렀을 때 GHCR 이미지가 받아져 온라인 주피터에서 `hw03.ipynb`가 열리는지 확인했다. GHCR로 올린 패키지 이미지가 public이어야 Binder가 끌어올 수 있음으로 GitHub의 Packages 설정에서 `my-r-env` 이미지의 가시성을 public으로 바꿔 두었다.
