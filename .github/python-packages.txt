@@ -1,0 +1,9 @@
+numpy
+pandas
+polars
+pyarrow
+plotnine
+statsmodels
+scipy
+scikit-misc
+matplotlib

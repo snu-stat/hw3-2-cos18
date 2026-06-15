@@ -1,0 +1,8 @@
+reticulate
+knitr
+rmarkdown
+tidyverse
+Lahman
+MASS
+NHANES
+patchwork
