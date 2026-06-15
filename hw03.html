@@ -5197,6 +5197,7 @@ lr:steroid     0.1616      0.075      2.161      0.031       0.015       0.308
 <section id="답안-5" class="level3">
 <h3 class="anchored" data-anchor-id="답안-5">답안</h3>
 <p>위에서 제공된 <code>Dockerfile</code> 원본에 일부 수정사항을 반영해서 커밋했다. <code>ENV RETICULATE_PYTHON</code>으로 Python 경로를 박아 둔 덕분에, 이전 과제에서부터 설정해놓았던 setup 청크에 넣은 <code>Sys.getenv(&quot;RETICULATE_PYTHON&quot;)</code> 분기가 컨테이너 안에서 이 값을 집어 들어 로컬에서와 똑같이 reticulate가 돈다. 그리고 <code>COPY _site/hw03.ipynb</code>는 빌드 시점에 <code>_site/hw03.ipynb</code>가 이미 만들어져 있어야 하는데, 뒤이어 나올 워크플로우에서 Quarto 렌더를 먼저 돌린 다음 도커 빌드를 하므로 순서가 맞는다.</p>
+<p>또한 이전 <code>publish.yml</code>에서 사용중인 두 언어의 <code>*-packages.txt</code>을 사용해 패키지를 설치하도록 수정하였다.</p>
 </section>
 </section>
 <section id="문제-3-2.-github-actions-워크플로우-수정" class="level2">
