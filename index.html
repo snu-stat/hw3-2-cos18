@@ -4010,7 +4010,7 @@ vertical-align: -.125em;
 <p>이 숙제의 상세 분석 결과는 아래 링크에서 확인하실 수 있습니다.</p>
 <ul>
 <li><a href="./hw03.html">분석 리포트 (HTML)</a></li>
-<li><a href="https://mybinder.org/v2/ghcr/cos18/my-r-env/latest?filepath=hw03.ipynb">주피터 노트북 (Binder)</a></li>
+<li><a href="https://mybinder.org/v2/gh/snu-stat/hw3-2-cos18/gh-pages?filepath=hw03.ipynb">주피터 노트북 (Binder)</a></li>
 </ul>
 <section id="안내사항" class="level3">
 <h3 class="anchored" data-anchor-id="안내사항">안내사항</h3>
@@ -4027,7 +4027,7 @@ vertical-align: -.125em;
 <p><strong>늦게 제출된 과제물은 받지 않는다.</strong></p>
 <p><strong>제출된 HTML파일 기준으로 채점할 예정이니 3번 문제를 완료하지 못하더라도 채점을 위한 HTML 파일을 명시한다.</strong></p>
 <p>채점 기준 HTML 파일은 위의 <a href="./hw03.html">분석 리포트 (HTML)</a>이다.</p>
-<p>위 Binder 링크를 누르면 노트북을 온라인에서 바로 실행할 수 있다. GitHub Actions가 <code>Dockerfile</code>로 빌드해 GHCR(<code>ghcr.io/cos18/my-r-env:latest</code>)에 올린 컨테이너 이미지를 Binder가 그대로 받아서 R + Python(reticulate) 환경을 띄우고, 이미지 안에 함께 복사해 둔 <code>hw03.ipynb</code>를 연다.</p>
+<p>위 Binder 링크를 누르면 노트북을 온라인에서 바로 실행할 수 있다. GitHub Actions가 분석 환경(conda + R 패키지)을 담은 이미지를 빌드해 GHCR(<code>ghcr.io/cos18/my-r-env</code>, 환경 해시를 태그로 사용)에 올리고, <code>gh-pages</code> 브랜치에는 그 이미지를 <code>FROM</code> 하는 간단한 <code>Dockerfile</code>과 <code>hw03.ipynb</code>를 함께 배포한다. Binder는 이 <code>gh-pages</code>를 받아 미리 만들어 둔 환경 이미지를 그대로 끌어오고 노트북만 얹어 R + Python(reticulate) 환경으로 띄운다. 환경이 바뀌지 않으면 같은 태그의 이미지가 GHCR에 이미 있으므로 재빌드 없이 재사용된다.</p>
 
 
 </section>
