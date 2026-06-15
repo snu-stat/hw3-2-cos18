@@ -805,7 +805,11 @@ EXPOSE 8888
 
 ### 답안
 
-숙제 2의 `publish.yml`(Quarto 렌더 후 `gh-pages`로 배포하던 워크플로우) 끝에, 문제에서 준 GHCR 로그인·빌드·푸시 단계를 그대로 이어 붙였다. 
+숙제 2의 `publish.yml`(Quarto 렌더 후 `gh-pages`로 배포하던 워크플로우) 끝에, 문제에서 준 GHCR 로그인·빌드·푸시 단계를 그대로 이어 붙였다. 이때 현재 리포지토리의 경우 `snu-stat`으로 되어있어 `ghcr.io`에 해당 계정명으로 업로드할 수가 없다. 따라서 해당 부분을 내 계정명으로 수정하고 내 토큰을 직접 사용하도록 수정하여 직접 가져올 수 있도록 했다. 이때 이 토큰의 경우 30일 동안만 유효하므로, 이후 다시 작동시킬려면 토큰을 연장하거나 재생성해 repository settings에 수정해야 한다.
+
+![](fig/result-3-2-1.png)
+
+![](fig/result-3-2-2.png)
 
 ## 문제 3-3. GitHub Pages에 Binder 링크 추가
 
@@ -830,3 +834,22 @@ GitHub Page를 사용하여 저장소를 웹페이지로 활용하는 부분은 
 작업을 GitHub 원격 저장소로 push한 후 숙제 2 문제 3-3의 3, 4번 과정을 반복하라.
 
 ### 답안
+
+`README.md`에 이름·학번과 함께 분석 리포트(HTML)와 노트북(Binder) 링크 절을 더했다. 노트북은 다운로드가 아니라 Binder URL로 걸었고, GitHub Classroom 배지와 안내사항은 그대로 두었다. `publish.yml`의 "Prepare README as Index" 단계가 이 `README.md`를 `index.md`로 복사해 Pages 첫 화면으로 쓴다.
+
+Binder 링크는 문제에 적힌 골격(`https://mybinder.org/v2/gh/...gh-pages`)을 그대로 쓰지 않고 `ghcr` 형식으로 바꿨다. `v2/gh/<...>/gh-pages` 형식은 Binder가 그 브랜치를 직접 받아 그 자리에서 이미지를 빌드(repo2docker)하는 방식인데, 우리 `gh-pages` 브랜치에는 렌더 산출물만 올라가고 `Dockerfile`은 없으므로 R + reticulate 환경이 잡히지 않는다. 무엇보다 README 안내사항 8번이 "초기 build 후 사이트를 접속할 때 이미 만들어진 my-r-env 패키지의 이미지를 사용한다"라고 못 박고 있고, 문제 3-1의 새 `Dockerfile`이 노트북까지 이미지 안에 복사해 넣도록 바뀐 것도 미리 빌드된 GHCR 이미지를 그대로 띄우는 흐름을 전제한 것이다. 그래서 GHCR 이미지를 직접 받는 `https://mybinder.org/v2/ghcr/cos18/my-r-env/latest?filepath=hw03.ipynb`가 의도에 맞는 링크다. 실제 `README.md`의 링크 부분은 다음과 같다.
+
+```markdown
+# Homework 3
+**제출마감 2026-06-15 23:00**
+
+이름: 박성우
+학번: 2025-22279
+
+이 숙제의 상세 분석 결과는 아래 링크에서 확인하실 수 있습니다.
+
+* [분석 리포트 (HTML)](./hw03.html)
+* [주피터 노트북 (Binder)](https://mybinder.org/v2/ghcr/cos18/my-r-env/latest?filepath=hw03.ipynb)
+```
+
+여기까지 한 뒤 작업을 원격 저장소로 push하고 숙제 2 문제 3-3의 3, 4번 과정을 반복했다. 즉 Actions 탭에서 워크플로우(렌더·배포·컨테이너 푸시)가 모두 초록불로 끝났는지 보고, Settings > Pages에서 "Your site is live at ..." 안내가 뜨는지, 그 페이지의 Binder 링크를 눌렀을 때 GHCR 이미지가 받아져 온라인 주피터에서 `hw03.ipynb`가 열리는지 확인했다. GHCR로 올린 패키지 이미지가 public이어야 Binder가 끌어올 수 있음으로 GitHub의 Packages 설정에서 `my-r-env` 이미지의 가시성을 public으로 바꿔 두었다.
